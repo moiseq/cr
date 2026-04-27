@@ -7,7 +7,7 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://localhost:6379"
     database_url: str = "sqlite+aiosqlite:///./data/cr.db"
-    binance_ws_url: str = "wss://fstream.binance.com/stream"
+    binance_ws_url: str = "wss://stream.binance.com:9443/stream"
 
     pairs: List[str] = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
     timeframes: List[str] = ["1m", "5m", "15m"]

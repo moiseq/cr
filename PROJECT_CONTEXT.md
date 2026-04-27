@@ -1,20 +1,22 @@
 # CR — Crypto Technical Analysis Bot
 
 ## What it is
-A full-stack real-time crypto trading dashboard that streams live candlestick data from **Binance USDT-M Futures (perpetuals)**, computes technical indicators, and renders buy/sell signals. Paper trading models long and short positions with leverage.
+A full-stack real-time crypto trading dashboard that streams live candlestick data from **Binance Spot**, computes technical indicators, and renders buy/sell signals. Paper trading models perpetual-futures-style positions (LONG/SHORT, leverage, liquidation) over the spot price feed.
+
+> Note: an attempt to use Binance USDT-M Futures (`fstream.binance.com`) as the live feed was reverted because the WebSocket connections are accepted but no klines are pushed for our server IP (REST works; WS feed is silently blocked). Spot price tracks perpetual price within ~0.1% basis, which is irrelevant for our indicator-driven signals.
 
 ## Stack
 | Layer | Tech |
 |-------|------|
 | Backend | Python 3.12, FastAPI, pandas-ta 0.4.71b0, pandas ≥2.3.2, numpy ≥2.2.6 |
-| WebSocket feed | Binance USDT-M Futures combined stream (`wss://fstream.binance.com/stream`) |
+| WebSocket feed | Binance Spot combined stream (`wss://stream.binance.com:9443/stream`) |
 | Cache | Redis 7-alpine |
 | DB | SQLite via SQLAlchemy 2 + aiosqlite (file: `backend/data/cr.db`) |
 | Frontend | Next.js 16.2.4, React 19, TypeScript, Tailwind CSS, lightweight-charts ^4.1.3 |
 | Infrastructure | Docker Compose v2 |
 
 ## Pairs & timeframes
-- Pairs (USDT-M perpetuals): BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT
+- Pairs: BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT (spot prices)
 - Timeframes: 1m, 5m, 15m
 - Total streams: 15
 
@@ -32,14 +34,14 @@ Strength buckets (from `config.py`):
 - `|score| ≥ 2.2` → STRONG
 
 ### Paper trading (frontend, `hooks/usePaperTrading.ts`)
-- **LONG and SHORT** (futures semantics).
+- **LONG and SHORT** (futures-style semantics over spot price feed).
 - **Timeframes**: 5m and 15m only. 1m is shown for charts but never trades.
 - **Entry**: STRONG always (any direction); MEDIUM only if a matching trend/mean-reversion reason confirms (`trend_up_confirm` or `mean_reversion_long` for LONG; `trend_down_confirm` or `mean_reversion_short` for SHORT).
 - **Sizing**: risk-based. `position_notional = (equity × risk%) / sl_distance%`. Capped by `balance × leverage`.
 - **SL/TP**: ATR-based (`SL = 1×ATR`, `TP = 2×ATR`). Trailing to breakeven once price moves 1×ATR in favour (both directions).
 - **Liquidation guard**: trade rejected if `|entry − liq_price| < 3 × |entry − SL|`.
-- **Fees**: 0.04% taker × 2 (entry + exit) deducted from P&L — matches Binance USDT-M VIP 0 taker rate.
-- **Funding rate**: NOT modelled (known limitation; would apply every 8h on real perpetuals).
+- **Fees**: 0.04% taker × 2 (entry + exit) deducted from P&L — approximates Binance USDT-M VIP 0 taker rate.
+- **Funding rate**: NOT modelled (would apply every 8h on real perpetuals).
 - **Defaults**: 1000 USDT balance, 0.5% risk/trade, 5x leverage. Hard cap 10x in UI.
 
 ### Sentiment module (backend, `app/sentiment/news.py`)
@@ -127,7 +129,7 @@ docker-compose logs -f frontend
 ```
 REDIS_URL=redis://redis:6379
 DATABASE_URL=sqlite+aiosqlite:///./data/cr.db
-BINANCE_WS_URL=wss://fstream.binance.com/stream
+BINANCE_WS_URL=wss://stream.binance.com:9443/stream
 ```
 
 ## Frontend env vars (`frontend/.env`)

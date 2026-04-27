@@ -60,14 +60,23 @@ class BinanceWSClient:
     async def _run_forever(self) -> None:
         url = build_combined_stream_url()
         backoff = 1
+        # With 15 streams (1m/5m/15m on 5 pairs), Binance pushes a tick at least
+        # every second. If we go longer than this without ANY message, the
+        # connection is silently dead — force a reconnect.
+        idle_timeout = 60
         while self._running:
             try:
                 logger.info("Connecting to Binance WS: %s", url[:80] + "...")
                 async with websockets.connect(url, ping_interval=20, ping_timeout=30) as ws:
                     backoff = 1
-                    logger.info("Connected to Binance USDT-M Futures combined stream (%d streams)", 15)
-                    async for raw in ws:
-                        if not self._running:
+                    logger.info("Connected to Binance Spot combined stream (%d streams)", 15)
+                    while self._running:
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=idle_timeout)
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                "No kline received for %ds — forcing reconnect", idle_timeout
+                            )
                             break
                         try:
                             message = json.loads(raw)

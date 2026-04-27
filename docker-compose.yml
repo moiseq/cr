@@ -26,7 +26,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=sqlite+aiosqlite:///./data/cr.db
-      - BINANCE_WS_URL=wss://fstream.binance.com/stream
+      - BINANCE_WS_URL=wss://stream.binance.com:9443/stream
       - INTERNAL_AUTH_TOKEN=${BACKEND_INTERNAL_TOKEN:-change-this-in-production}
     env_file:
       - ./backend/.env
