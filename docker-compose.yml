@@ -1,0 +1,84 @@
+services:
+  redis:
+    image: redis:7-alpine
+    # sem ports: Redis acessível apenas dentro da rede Docker
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  backend:
+    image: cr_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=sqlite+aiosqlite:///./data/cr.db
+      - BINANCE_WS_URL=wss://fstream.binance.com/stream
+      - INTERNAL_AUTH_TOKEN=${BACKEND_INTERNAL_TOKEN:-change-this-in-production}
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+    depends_on:
+      - redis
+    networks:
+      - internal
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  frontend:
+    image: cr_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL:
+        NEXT_PUBLIC_WS_URL: wss://cr.ipk-labs.com/ws
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=
+      - NEXT_PUBLIC_WS_URL=
+      - NODE_ENV=production
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://cr.ipk-labs.com}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-changeme}
+      - AUTH_SECRET=${AUTH_SECRET:-change-this-in-production}
+      - AUTH_SESSION_TOKEN=${AUTH_SESSION_TOKEN:-}
+      - BACKEND_INTERNAL_TOKEN=${BACKEND_INTERNAL_TOKEN:-change-this-in-production}
+    env_file:
+      - ./frontend/.env
+    networks:
+      - internal
+      - ipk
+    depends_on:
+      - backend
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  redis_data:
+  backend_data:
+
+networks:
+  internal:
+    driver: overlay
+  ipk:
+    external: true

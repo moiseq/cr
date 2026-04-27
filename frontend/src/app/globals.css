@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  @apply bg-surface text-slate-100;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  min-height: 100dvh;
+  /* Bottom safe-area only — top is handled by the sticky header itself
+     so it can sit flush against the status bar with proper padding. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Larger tap targets on touch devices */
+@media (pointer: coarse) {
+  button,
+  [role="button"] {
+    min-height: 36px;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}

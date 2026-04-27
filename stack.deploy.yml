@@ -1,0 +1,105 @@
+services:
+  backend:
+    build:
+      context: /home/ipk/cr/backend
+      dockerfile: Dockerfile
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    depends_on:
+      - redis
+    deploy:
+      restart_policy:
+        condition: on-failure
+    environment:
+      BINANCE_WS_URL: wss://fstream.binance.com/stream
+      DATABASE_URL: sqlite+aiosqlite:///./data/cr.db
+      INTERNAL_AUTH_TOKEN: 91ce39aa2974ba9b93bd01be5b7dd2f9f6a2e3d2b69b6d98d3d8dd3c1c12292a
+      REDIS_URL: redis://redis:6379
+    image: cr_backend:20260427-122232
+    networks:
+      internal: null
+    ports:
+      - mode: ingress
+        target: 8000
+        published: 8001
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /home/ipk/cr/backend
+        target: /app
+        bind: {}
+      - type: volume
+        source: backend_data
+        target: /app/data
+        volume: {}
+  frontend:
+    build:
+      context: /home/ipk/cr/frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_WS_URL: wss://cr.ipk-labs.com/ws
+    depends_on:
+      - backend
+    deploy:
+      restart_policy:
+        condition: on-failure
+    environment:
+      AUTH_PASSWORD: 2Wb1Dva2gqkKkYsi5roG2Ov8dN3kwQ2l
+      AUTH_SECRET: 16cad85fab87cd38e723076b5fb4ca62774d9eda02ab9e4b42ffe989898b4464
+      AUTH_SESSION_TOKEN: ""
+      AUTH_USERNAME: admin
+      BACKEND_INTERNAL_TOKEN: 91ce39aa2974ba9b93bd01be5b7dd2f9f6a2e3d2b69b6d98d3d8dd3c1c12292a
+      NEXT_PUBLIC_API_URL: ""
+      NEXT_PUBLIC_WS_URL: ""
+      NODE_ENV: production
+      PUBLIC_BASE_URL: https://cr.ipk-labs.com
+    image: cr_frontend:20260427-122232
+    networks:
+      internal: null
+      ipk: null
+    ports:
+      - mode: ingress
+        target: 3000
+        published: 3000
+        protocol: tcp
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    deploy:
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 3s
+      interval: 5s
+      retries: 5
+    image: redis:7-alpine
+    networks:
+      internal: null
+    volumes:
+      - type: volume
+        source: redis_data
+        target: /data
+        volume: {}
+networks:
+  internal:
+    name: cr_internal
+    driver: overlay
+  ipk:
+    name: ipk
+    external: true
+volumes:
+  backend_data:
+    name: cr_backend_data
+  redis_data:
+    name: cr_redis_data

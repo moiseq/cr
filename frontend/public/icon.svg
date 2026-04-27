@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#0f172a"/>
+  <path d="M24 128 L56 96 L80 116 L120 64 L168 100" stroke="#22c55e" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="96" y="170" font-family="ui-sans-serif,system-ui,sans-serif" font-size="38" font-weight="800" fill="#e2e8f0" text-anchor="middle" letter-spacing="2">CR</text>
+</svg>
