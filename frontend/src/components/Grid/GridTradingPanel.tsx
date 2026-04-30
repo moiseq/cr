@@ -23,6 +23,14 @@ function fmtPrice(n?: number | null) {
   });
 }
 
+function fmtUsd(n?: number | null) {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function fmtPct(n?: number) {
   if (n == null) return "—";
   const sign = n >= 0 ? "+" : "";
@@ -99,7 +107,7 @@ function GridPairCard({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-        <Mini label="Allocated" value={`$${fmtPrice(grid.allocatedCapital)}`} />
+        <Mini label="Allocated" value={`$${fmtUsd(grid.allocatedCapital)}`} />
         <Mini label="Live price" value={fmtPrice(livePrice)} />
         <Mini label="Center (EMA21)" value={fmtPrice(grid.center)} />
         <Mini label="Spacing" value={fmtPrice(grid.spacing)} />
@@ -232,7 +240,7 @@ function CellRow({ trade }: { trade: GridCellTrade }) {
           <span className="text-slate-500 italic">—</span>
         ) : (
           <span className={pnlPositive ? "text-green-400" : "text-red-400"}>
-            {pnlPositive ? "+" : ""}${fmtPrice(trade.pnl)}
+            {pnlPositive ? "+" : ""}${fmtUsd(trade.pnl)}
           </span>
         )}
       </td>
@@ -268,14 +276,11 @@ export function GridTradingPanel({ state, onReset }: Props) {
       ? ((state.equity - state.initialBalance) / state.initialBalance) * 100
       : 0;
 
-  // Open (unrealised) P&L on currently-open cells. Mirrors the backend formula:
-  //   equity = balance + locked_margin + unrealised
-  // → unrealised = equity - balance - locked_margin
-  const lockedMargin = Object.values(state.openTrades).reduce(
-    (sum, t) => sum + (t.margin || 0),
-    0,
-  );
-  const openPnl = state.equity - state.balance - lockedMargin;
+  // Open P&L = unrealised mark-to-market on currently-open cells, NET of the
+  // entry fees already deducted from balance. Defined so that
+  //   equity = initialBalance + realisedPnL + openPnL
+  // always holds (otherwise paid entry fees would be invisible until close).
+  const openPnl = state.equity - state.initialBalance - state.totalPnl;
 
   function handleReset() {
     const b = parseFloat(balanceInput);
@@ -368,8 +373,8 @@ export function GridTradingPanel({ state, onReset }: Props) {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-        <Stat label="Equity" value={`$${fmtPrice(state.equity)}`} />
-        <Stat label="Free Balance" value={`$${fmtPrice(state.balance)}`} />
+        <Stat label="Equity" value={`$${fmtUsd(state.equity)}`} />
+        <Stat label="Free Balance" value={`$${fmtUsd(state.balance)}`} />
         <Stat
           label="Total Return"
           value={fmtPct(totalReturnPct)}
@@ -377,15 +382,15 @@ export function GridTradingPanel({ state, onReset }: Props) {
         />
         <Stat
           label="Realised P&L"
-          value={`${state.totalPnl >= 0 ? "+" : ""}$${fmtPrice(state.totalPnl)}`}
+          value={`${state.totalPnl >= 0 ? "+" : ""}$${fmtUsd(state.totalPnl)}`}
           color={state.totalPnl >= 0 ? "green" : "red"}
         />
         <Stat
           label="Open P&L"
-          value={`${openPnl >= 0 ? "+" : ""}$${fmtPrice(openPnl)}`}
+          value={`${openPnl >= 0 ? "+" : ""}$${fmtUsd(openPnl)}`}
           color={openPnl >= 0 ? "green" : "red"}
         />
-        <Stat label="Fees Paid" value={`$${fmtPrice(state.totalFees)}`} color="red" />
+        <Stat label="Fees Paid" value={`$${fmtUsd(state.totalFees)}`} color="red" />
         <Stat
           label="Win Rate"
           value={`${state.winRate.toFixed(1)}%`}

@@ -12,7 +12,7 @@ from app.api.ws import manager
 from app.binance.backfill import backfill_all
 from app.binance.client import BinanceWSClient
 from app.config import settings
-from app.core import grid_trader, signal_trader
+from app.core import grid_trader
 from app.core.processor import bootstrap_grid_regimes, handle_kline, seed_buffers, sentiment_refresh_loop
 from app.storage.database import init_db
 from app.storage.redis_client import close_redis, wait_for_redis
@@ -43,9 +43,6 @@ async def lifespan(app: FastAPI):
 
     # Seed in-memory candle buffers from Redis (enables indicators immediately after restart)
     await seed_buffers()
-
-    # Load persisted signal-trader state (balance, open positions, history).
-    await signal_trader.load()
 
     # Load persisted grid-trading state.
     await grid_trader.load()

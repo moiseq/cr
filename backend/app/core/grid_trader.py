@@ -20,7 +20,7 @@ solve the main weakness of grids (catastrophic drawdowns in strong trends):
 State is persisted to SQLite (``GridStateModel``) and broadcast to all
 connected WS clients as ``{"type": "grid_state", "state": {...}}``.
 
-Independent capital from the signal-trader (``signal_trader``).
+Grid-only trading bot (signal trading was removed).
 """
 
 from __future__ import annotations
@@ -64,13 +64,13 @@ SENTIMENT_BULL = 0.15
 SENTIMENT_BEAR = -0.15
 
 # Defaults
-DEFAULT_INITIAL_BALANCE = 700.0  # 70% of $1000 (signal_trader gets the other 30%)
+DEFAULT_INITIAL_BALANCE = 1000.0
 DEFAULT_LEVERAGE = 3
 DEFAULT_PER_PAIR_PCT = 50.0  # equal split BTC/ETH
 
 _state_lock = asyncio.Lock()
 _state: dict | None = None
-_id_counter = int(time.time() * 1000) + 500_000  # disjoint from signal_trader ids
+_id_counter = int(time.time() * 1000) + 500_000
 
 
 def _next_id() -> int:
@@ -135,7 +135,12 @@ def _recalc_stats(state: dict) -> None:
             unrealised += t["qty"] * (t["entryPrice"] - mark)
 
     state["totalPnl"] = sum((t.get("pnl") or 0) for t in closed)
-    state["totalFees"] = sum(t.get("feesPaid", 0) for t in closed)
+    # Include entry fees of currently-open cells (already deducted from balance
+    # at open-time) so the displayed total matches the actual cash spent on fees.
+    state["totalFees"] = (
+        sum(t.get("feesPaid", 0) for t in closed)
+        + sum(t.get("feesPaid", 0) for t in state["openTrades"].values())
+    )
     state["winRate"] = (wins / len(closed) * 100) if closed else 0.0
     state["totalTrades"] = len(closed)
     state["equity"] = state["balance"] + locked_margin + unrealised
@@ -230,6 +235,53 @@ async def update_config(initial_balance: float, leverage: int, per_pair_pct: flo
         snapshot = json.loads(json.dumps(_state))
     await _broadcast()
     return snapshot
+
+
+async def backfill_realised_pnl_with_entry_fee() -> dict:
+    """One-off: rewrite closed-trade `pnl` to include the entry fee.
+
+    Older trades stored `pnl = gross - exit_fee` (entry fee was applied to
+    balance at open-time but not subtracted from the trade's reported pnl).
+    This brings them in line with the new formula `pnl = gross - both_fees`,
+    so that ``equity ≈ initialBalance + totalPnl + open_pnl`` holds.
+
+    Idempotent guard: skips trades already marked ``_pnlBackfilled``.
+    Does NOT touch balance / equity / openTrades / feesPaid.
+    """
+    global _state
+    async with _state_lock:
+        if _state is None:
+            return {"fixed": 0, "delta": 0.0}
+        fixed = 0
+        delta = 0.0
+        for t in _state.get("trades", []):
+            if t.get("status") != "closed":
+                continue
+            if t.get("_pnlBackfilled"):
+                continue
+            entry_price = t.get("entryPrice") or 0
+            qty = t.get("qty") or 0
+            margin = t.get("margin") or 0
+            entry_fee = entry_price * qty * TAKER_FEE
+            if entry_fee <= 0:
+                continue
+            old_pnl = t.get("pnl") or 0
+            new_pnl = old_pnl - entry_fee
+            t["pnl"] = new_pnl
+            t["pnlPct"] = (new_pnl / margin) * 100 if margin > 0 else 0.0
+            t["_pnlBackfilled"] = True
+            delta += (new_pnl - old_pnl)
+            fixed += 1
+        old_total = _state.get("totalPnl", 0)
+        _recalc_stats(_state)
+        new_total = _state["totalPnl"]
+        await _save()
+    await _broadcast()
+    logger.info(
+        "Grid backfill: %d trades fixed, totalPnl %.4f -> %.4f (delta %.4f)",
+        fixed, old_total, new_total, delta,
+    )
+    return {"fixed": fixed, "oldTotalPnl": old_total, "newTotalPnl": new_total, "delta": delta}
 
 
 # ---------------------------------------------------------------------------
@@ -437,7 +489,10 @@ def _close_cell(
     else:
         gross = trade["qty"] * (trade["entryPrice"] - exit_price)
     total_fees = trade["feesPaid"] + exit_fee
-    net = gross - exit_fee
+    # P&L net of BOTH fees (entry + exit). The entry fee was already deducted
+    # from balance at open-time, so balance is updated with `gross - exit_fee`,
+    # but the trade's reported pnl must include both legs to match equity.
+    net = gross - total_fees
 
     # Update history copy
     for i, t in enumerate(state["trades"]):
@@ -454,7 +509,9 @@ def _close_cell(
             }
             break
 
-    state["balance"] += trade["margin"] + net
+    # Balance receives margin back + (gross - exit_fee). Entry fee was already
+    # deducted at open-time, so we must NOT subtract it again here.
+    state["balance"] += trade["margin"] + (gross - exit_fee)
     del state["openTrades"][cid]
     grid = state["grids"].get(trade["pair"], {})
     grid_cells = grid.get("cells", {})

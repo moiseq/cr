@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from app.api.ws import manager
 from app.config import settings
-from app.core import grid_trader, signal_trader
+from app.core import grid_trader
 from app.indicators.calculator import calculate_indicators
 from app.indicators.signals import generate_signal
 from app.sentiment.news import compute_sentiment
@@ -96,12 +96,7 @@ async def handle_kline(symbol: str, timeframe: str, candle: dict) -> None:
             "timeframe": timeframe,
             "candle": candle,
         })
-        # Refresh unrealised P&L on the open signal-trader position for this symbol (if any).
-        try:
-            await signal_trader.on_live_tick(symbol, candle)
-        except Exception:
-            logger.exception("signal_trader.on_live_tick failed")
-        # Same for grid-trading open cells.
+        # Refresh unrealised P&L on grid-trading open cells for this symbol (if any).
         try:
             await grid_trader.on_live_tick(symbol, candle)
         except Exception:
@@ -170,14 +165,6 @@ async def handle_kline(symbol: str, timeframe: str, candle: dict) -> None:
 
     await manager.broadcast(payload)
     logger.debug("Processed closed candle %s %s close=%.4f", symbol, timeframe, candle["close"])
-
-    # Feed the signal-trader engine. It decides whether to manage open trades
-    # and/or open a new one based on the signal. Runs entirely in background;
-    # independent of any connected frontend client.
-    try:
-        await signal_trader.on_closed_candle(symbol, timeframe, candle, public_indicators, signal)
-    except Exception:
-        logger.exception("signal_trader.on_closed_candle failed")
 
     # Feed the grid trader. 1h drives regime detection + grid rebuilds; 15m
     # drives cell entries / exits.

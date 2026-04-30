@@ -43,7 +43,7 @@ export interface Sentiment {
   label: "bullish" | "bearish" | "neutral";
 }
 
-export type WsMessageType = "candle_live" | "candle_closed" | "signal_state" | "grid_state";
+export type WsMessageType = "candle_live" | "candle_closed" | "grid_state";
 
 export interface WsMessage {
   type: WsMessageType;
@@ -53,7 +53,7 @@ export interface WsMessage {
   candle?: Candle;
   indicators?: Indicators;
   signal?: Signal;
-  // Present for signal_state / grid_state
+  // Present for grid_state
   state?: unknown;
 }
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.api.auth import verify_internal_request
 from app.config import settings
-from app.core import grid_trader, signal_trader
+from app.core import grid_trader
 from app.storage import redis_client
 
 logger = logging.getLogger(__name__)
@@ -68,39 +68,6 @@ async def get_sentiment() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Signal-trader endpoints
-# ---------------------------------------------------------------------------
-
-
-class SignalTraderConfigPayload(BaseModel):
-    initialBalance: float = Field(gt=0)
-    riskPerTradePct: float = Field(gt=0, le=10)
-    leverage: int = Field(ge=1, le=signal_trader.MAX_LEVERAGE)
-
-
-@router.get("/signal-trader")
-async def get_signal_trader_state() -> dict:
-    """Current state of the background signal-trader bot."""
-    return signal_trader.get_state()
-
-
-@router.post("/signal-trader/reset")
-async def reset_signal_trader_state(payload: SignalTraderConfigPayload) -> dict:
-    """Wipe all trades and start fresh with the given configuration."""
-    return await signal_trader.reset(
-        payload.initialBalance, payload.riskPerTradePct, payload.leverage
-    )
-
-
-@router.post("/signal-trader/config")
-async def update_signal_trader_config(payload: SignalTraderConfigPayload) -> dict:
-    """Update signal-trader configuration without wiping history or open trades."""
-    return await signal_trader.update_config(
-        payload.initialBalance, payload.riskPerTradePct, payload.leverage
-    )
-
-
-# ---------------------------------------------------------------------------
 # Grid-trading endpoints
 # ---------------------------------------------------------------------------
 
@@ -129,3 +96,12 @@ async def update_grid_config(payload: GridConfigPayload) -> dict:
     return await grid_trader.update_config(
         payload.initialBalance, payload.leverage, payload.perPairAllocationPct
     )
+
+
+@router.post("/grid/backfill-pnl")
+async def backfill_grid_pnl() -> dict:
+    """One-off: rewrite closed-trade pnl to include the entry fee.
+
+    Idempotent: each trade is marked once it has been corrected.
+    """
+    return await grid_trader.backfill_realised_pnl_with_entry_fee()

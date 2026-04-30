@@ -5,7 +5,7 @@ import { WsMessage } from "@/lib/types";
 import { useWebSocket } from "./useWebSocket";
 
 // ---------------------------------------------------------------------------
-// Grid-trading hook — server-driven (mirror of useSignalTrader).
+// Grid-trading hook — server-driven.
 // All logic runs in `backend/app/core/grid_trader.py`.
 // ---------------------------------------------------------------------------
 

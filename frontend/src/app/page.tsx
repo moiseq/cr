@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Pair, Timeframe } from "@/lib/types";
 import { useMarketData } from "@/hooks/useMarketData";
-import { useSignalTrader } from "@/hooks/useSignalTrader";
 import { useGridTrading } from "@/hooks/useGridTrading";
 import { useSentiment } from "@/hooks/useSentiment";
 import { PairSelector } from "@/components/PairSelector";
@@ -11,7 +10,6 @@ import { TimeframeSelector } from "@/components/TimeframeSelector";
 import { CandlestickChart } from "@/components/Chart/CandlestickChart";
 import { IndicatorPanel } from "@/components/Chart/IndicatorPanel";
 import { SignalFeed } from "@/components/Signals/SignalFeed";
-import { SignalTraderPanel } from "@/components/SignalTrader/SignalTraderPanel";
 import { GridTradingPanel } from "@/components/Grid/GridTradingPanel";
 import { Sidebar, View } from "@/components/Sidebar";
 
@@ -20,7 +18,6 @@ export default function DashboardPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [view, setView] = useState<View>("dashboard");
 
-  const { state: signalState, reset, openTradesCount } = useSignalTrader();
   const {
     state: gridState,
     reset: gridReset,
@@ -48,7 +45,6 @@ export default function DashboardPage() {
       <Sidebar
         current={view}
         onChange={setView}
-        openTradesCount={openTradesCount}
         openCellsCount={openCellsCount}
       />
 
@@ -130,14 +126,14 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {openTradesCount > 0 && (
+              {openCellsCount > 0 && (
                 <button
-                  onClick={() => setView("signal")}
-                  className="bg-yellow-900/30 border border-yellow-600/50 rounded px-4 py-2 hover:bg-yellow-900/50 transition"
+                  onClick={() => setView("grid")}
+                  className="bg-cyan-900/30 border border-cyan-600/50 rounded px-4 py-2 hover:bg-cyan-900/50 transition"
                 >
-                  <span className="text-xs text-yellow-400/70 block">Active Trades</span>
-                  <span className="text-lg font-mono font-bold text-yellow-300">
-                    {openTradesCount} open
+                  <span className="text-xs text-cyan-400/70 block">Open Grid Cells</span>
+                  <span className="text-lg font-mono font-bold text-cyan-300">
+                    {openCellsCount} open
                   </span>
                 </button>
               )}
@@ -163,20 +159,6 @@ export default function DashboardPage() {
                 <SignalFeed signals={data.signals} timeframe={timeframe} />
               </div>
             </div>
-          </>
-        )}
-
-        {view === "signal" && (
-          <>
-            <header className="mb-4">
-              <h1 className="text-xl font-bold tracking-tight">
-                Signal Trading{" "}
-                <span className="text-slate-500 font-normal text-base">
-                  All pairs · global history
-                </span>
-              </h1>
-            </header>
-            <SignalTraderPanel state={signalState} onReset={reset} />
           </>
         )}
 

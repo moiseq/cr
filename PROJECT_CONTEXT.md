@@ -25,24 +25,43 @@ RSI, EMA (9, 21, 50), MACD, Bollinger Bands, ATR(14)
 
 ## Strategy & paper trading
 
-### Signal engine (backend, `app/indicators/signals.py`)
-Weighted-score model. Each indicator contributes a positive (bullish) or negative (bearish) value. A master trend filter (`close vs EMA50` + `EMA21 vs EMA50`) damps counter-trend setups by 60%. Optional macro sentiment from RSS news (VADER) nudges the score.
+> Signal trading was removed (April 2026) — results were inconclusive. The bot
+> now runs **grid trading only**.
+
+### Indicator engine (backend, `app/indicators/signals.py`)
+Weighted-score model used to flag BUY/SELL events on the dashboard (display
+only; no trading is performed off these signals anymore). A master trend filter
+(`close vs EMA50` + `EMA21 vs EMA50`) damps counter-trend setups by 60%.
+Optional macro sentiment from RSS news (VADER) nudges the score.
 
 Strength buckets (from `config.py`):
 - `|score| < 0.8` → discarded
 - `|score| ≥ 1.4` → MEDIUM
 - `|score| ≥ 2.2` → STRONG
 
-### Paper trading (frontend, `hooks/usePaperTrading.ts`)
-- **LONG and SHORT** (futures-style semantics over spot price feed).
-- **Timeframes**: 15m and 1h. 4h is shown for charts/context but never trades.
-- **Entry**: STRONG always (any direction); MEDIUM only if a matching trend/mean-reversion reason confirms (`trend_up_confirm` or `mean_reversion_long` for LONG; `trend_down_confirm` or `mean_reversion_short` for SHORT).
-- **Sizing**: risk-based. `position_notional = (equity × risk%) / sl_distance%`. Capped by `balance × leverage`.
-- **SL/TP**: ATR-based (`SL = 1×ATR`, `TP = 2×ATR`). Trailing to breakeven once price moves 1×ATR in favour (both directions).
-- **Liquidation guard**: trade rejected if `|entry − liq_price| < 3 × |entry − SL|`.
-- **Fees**: 0.04% taker × 2 (entry + exit) deducted from P&L — approximates Binance USDT-M VIP 0 taker rate.
-- **Funding rate**: NOT modelled (would apply every 8h on real perpetuals).
-- **Defaults**: 1000 USDT balance, 0.5% risk/trade, 5x leverage. Hard cap 10x in UI.
+### Grid trader (backend, `app/core/grid_trader.py`)
+Adaptive regime-aware grid on **BTCUSDT + ETHUSDT** only.
+
+- **Regime** detected on each closed 1h candle (TREND_UP / TREND_DOWN / RANGE /
+  CHOP) from EMA21 vs EMA50 spread, close vs EMA50, BB width. Sentiment biases
+  the call.
+- **Grid build**: centred on EMA21, half-width = max(BB, 1.5×ATR), spacing =
+  0.5×ATR. Bounded by `MIN_LEVELS=4` / `MAX_LEVELS=12`.
+- **Direction allowed**: RANGE = both, TREND_UP = LONG only, TREND_DOWN = SHORT
+  only, CHOP/UNKNOWN = grid disabled (capital idle).
+- **Cell sizing**: `notional = (alloc_pair × leverage) / n_levels` — fixed by
+  `initialBalance` (no compounding). Margin = notional / leverage.
+- **TP / SL**: TP = 1×spacing, **SL = 2×spacing** (RR 1:2; old value 3× was too
+  wide for the 81% historical win-rate). `MAX_CELLS_PER_SIDE = 3` per pair to
+  limit drawdown when regime flips.
+- **Safety**: hard escape closes all cells if price exits grid by >2×ATR.
+  Sentiment >|0.30| against open cells closes the opposed side.
+- **Fees**: 0.04% taker on entry AND exit, both deducted from `balance` /
+  reflected in trade `pnl` (fix April 2026 — prior trades had only exit fee).
+- **Funding rate**: NOT modelled.
+- **Defaults**: $1000 balance, 3× leverage, 50% per pair, max 10× leverage in UI.
+- **Endpoints**: `GET /api/grid`, `POST /api/grid/reset`, `POST /api/grid/config`,
+  `POST /api/grid/backfill-pnl` (one-off, idempotent, recomputes pnl with both fees).
 
 ### Sentiment module (backend, `app/sentiment/news.py`)
 RSS aggregation (Cointelegraph, CoinDesk, Decrypt, CryptoPanic, Bitcoin Magazine) + VADER. Refreshed every 10 min by background task. Exposed at `GET /api/sentiment` and injected into the signal engine as `_sentiment`.
@@ -137,3 +156,28 @@ BINANCE_WS_URL=wss://stream.binance.com:9443/stream
 NEXT_PUBLIC_API_URL=http://localhost:8001
 NEXT_PUBLIC_WS_URL=ws://localhost:8001/ws
 ```
+
+## TODO — going live
+
+### Exchange selection (in evaluation)
+- **Binance USDT-M Futures**: WS feed (`fstream.binance.com`) silently blocks
+  klines for our current server IP (REST works). Would need a different
+  VPS / region or IP whitelisting before going live.
+- **Robinhood Europe** (legal in PT): comparable taker fees to Binance and now
+  exposes a **futures API**. Worth investigating as the primary venue — avoids
+  the Binance WS-block issue entirely. Action items when we get there:
+    - Confirm API supports BTCUSDT / ETHUSDT perpetuals + LONG and SHORT
+    - Compare effective fees (maker/taker, funding) against Binance
+    - Validate WS market-data + REST execution latency from our infra
+    - Build a thin abstraction layer so the grid trader can target either venue
+
+### Other prerequisites before real money
+- Execution layer: LIMIT orders at each grid level + fill reconciliation
+- Funding-rate handling (subscribe + factor into P&L; potentially close
+  positions before unfavourable funding windows)
+- Risk: kill switch, daily loss limit, hard max-position cap, state-vs-exchange
+  reconciliation guard
+- Slippage / min-notional / lot-size enforcement per symbol
+- Telegram or email alerts on fills, SL hits, errors, disconnections
+- Test on the venue's testnet (or smallest possible live size) for 1–2 weeks
+  before scaling capital

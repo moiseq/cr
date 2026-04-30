@@ -70,7 +70,7 @@ export function useMarketData(activePair: Pair, activeTimeframe: Timeframe) {
   }, []);
 
   const handleMessage = useCallback((msg: WsMessage) => {
-    // Ignore non-candle WS messages (e.g. signal_state — handled by useSignalTrader).
+    // Ignore non-candle WS messages (e.g. grid_state — handled by useGridTrading).
     if (msg.type !== "candle_live" && msg.type !== "candle_closed") return;
 
     const { type, symbol, timeframe, candle, indicators, signal } = msg;

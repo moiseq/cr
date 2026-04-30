@@ -3,16 +3,15 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 
-export type View = "dashboard" | "signal" | "grid";
+export type View = "dashboard" | "grid";
 
 interface Props {
   current: View;
   onChange: (v: View) => void;
-  openTradesCount: number;
   openCellsCount: number;
 }
 
-export function Sidebar({ current, onChange, openTradesCount, openCellsCount }: Props) {
+export function Sidebar({ current, onChange, openCellsCount }: Props) {
   const [open, setOpen] = useState(false);
 
   // Close drawer on Escape and lock body scroll while open (mobile only)
@@ -61,20 +60,6 @@ export function Sidebar({ current, onChange, openTradesCount, openCellsCount }: 
             )}
           >
             Chart
-          </button>
-          <button
-            onClick={() => handleNav("signal")}
-            className={clsx(
-              "relative px-2 py-1 rounded transition",
-              current === "signal" ? "bg-slate-800 text-white" : "text-slate-400"
-            )}
-          >
-            Signals
-            {openTradesCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[9px] font-bold px-1 rounded-full min-w-[16px] text-center">
-                {openTradesCount}
-              </span>
-            )}
           </button>
           <button
             onClick={() => handleNav("grid")}
@@ -136,12 +121,6 @@ export function Sidebar({ current, onChange, openTradesCount, openCellsCount }: 
           label="Dashboard"
           active={current === "dashboard"}
           onClick={() => handleNav("dashboard")}
-        />
-        <NavItem
-          label="Signal Trading"
-          active={current === "signal"}
-          onClick={() => handleNav("signal")}
-          badge={openTradesCount > 0 ? openTradesCount : undefined}
         />
         <NavItem
           label="Grid Trading"
