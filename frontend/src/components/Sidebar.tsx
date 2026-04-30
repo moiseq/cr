@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 
-export type View = "dashboard" | "paper";
+export type View = "dashboard" | "signal" | "grid";
 
 interface Props {
   current: View;
   onChange: (v: View) => void;
   openTradesCount: number;
+  openCellsCount: number;
 }
 
-export function Sidebar({ current, onChange, openTradesCount }: Props) {
+export function Sidebar({ current, onChange, openTradesCount, openCellsCount }: Props) {
   const [open, setOpen] = useState(false);
 
   // Close drawer on Escape and lock body scroll while open (mobile only)
@@ -62,16 +63,30 @@ export function Sidebar({ current, onChange, openTradesCount }: Props) {
             Chart
           </button>
           <button
-            onClick={() => handleNav("paper")}
+            onClick={() => handleNav("signal")}
             className={clsx(
               "relative px-2 py-1 rounded transition",
-              current === "paper" ? "bg-slate-800 text-white" : "text-slate-400"
+              current === "signal" ? "bg-slate-800 text-white" : "text-slate-400"
             )}
           >
-            Trades
+            Signals
             {openTradesCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[9px] font-bold px-1 rounded-full min-w-[16px] text-center">
                 {openTradesCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => handleNav("grid")}
+            className={clsx(
+              "relative px-2 py-1 rounded transition",
+              current === "grid" ? "bg-slate-800 text-white" : "text-slate-400"
+            )}
+          >
+            Grid
+            {openCellsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-cyan-400 text-black text-[9px] font-bold px-1 rounded-full min-w-[16px] text-center">
+                {openCellsCount}
               </span>
             )}
           </button>
@@ -123,10 +138,17 @@ export function Sidebar({ current, onChange, openTradesCount }: Props) {
           onClick={() => handleNav("dashboard")}
         />
         <NavItem
-          label="Paper Trading"
-          active={current === "paper"}
-          onClick={() => handleNav("paper")}
+          label="Signal Trading"
+          active={current === "signal"}
+          onClick={() => handleNav("signal")}
           badge={openTradesCount > 0 ? openTradesCount : undefined}
+        />
+        <NavItem
+          label="Grid Trading"
+          active={current === "grid"}
+          onClick={() => handleNav("grid")}
+          badge={openCellsCount > 0 ? openCellsCount : undefined}
+          badgeColor="cyan"
         />
 
         <div className="mt-auto px-3 pt-4 border-t border-border">
@@ -149,11 +171,13 @@ function NavItem({
   active,
   onClick,
   badge,
+  badgeColor,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
   badge?: number;
+  badgeColor?: "yellow" | "cyan";
 }) {
   return (
     <button
@@ -167,7 +191,12 @@ function NavItem({
     >
       <span>{label}</span>
       {badge !== undefined && (
-        <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+        <span
+          className={clsx(
+            "text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center",
+            badgeColor === "cyan" ? "bg-cyan-400" : "bg-yellow-500"
+          )}
+        >
           {badge}
         </span>
       )}

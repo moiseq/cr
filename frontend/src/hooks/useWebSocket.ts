@@ -1,74 +1,92 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect } from "react";
 import { WsMessage } from "@/lib/types";
 
-interface UseWebSocketOptions {
-  onMessage: (msg: WsMessage) => void;
-}
+// ---------------------------------------------------------------------------
+// Singleton WebSocket — one connection shared by every subscriber.
+// Multiple components can call useWebSocket(...) and each will receive every
+// message via their own callback. Reconnects automatically on close.
+// ---------------------------------------------------------------------------
 
-function getWebSocketUrl() {
+type Listener = (msg: WsMessage) => void;
+
+const listeners = new Set<Listener>();
+let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let pingTimer: ReturnType<typeof setInterval> | null = null;
+
+function getWebSocketUrl(): string | null {
   if (typeof window === "undefined") return null;
-
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   return `${protocol}://${window.location.host}/ws`;
 }
 
-export function useWebSocket({ onMessage }: UseWebSocketOptions) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
+function ensureConnection() {
+  if (typeof window === "undefined") return;
+  if (
+    socket &&
+    (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
 
-  const connect = useCallback(() => {
-    if (!mountedRef.current) return;
+  const url = getWebSocketUrl();
+  if (!url) return;
 
-    const wsUrl = getWebSocketUrl();
-    if (!wsUrl) return;
+  const ws = new WebSocket(url);
+  socket = ws;
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+  ws.onopen = () => {
+    console.log("[WS] Connected");
+  };
 
-    ws.onopen = () => {
-      console.log("[WS] Connected");
-    };
-
-    ws.onmessage = (event) => {
+  ws.onmessage = (event) => {
+    let msg: WsMessage;
+    try {
+      msg = JSON.parse(event.data) as WsMessage;
+    } catch {
+      return;
+    }
+    for (const l of listeners) {
       try {
-        const msg = JSON.parse(event.data) as WsMessage;
-        onMessage(msg);
+        l(msg);
       } catch {
-        // ignore malformed messages
+        // never let one bad listener break the others
       }
-    };
+    }
+  };
 
-    ws.onerror = () => {
-      ws.close();
-    };
+  ws.onerror = () => {
+    ws.close();
+  };
 
-    ws.onclose = () => {
-      console.log("[WS] Disconnected — reconnecting in 3s");
-      if (mountedRef.current) {
-        reconnectTimeout.current = setTimeout(connect, 3000);
-      }
-    };
-  }, [onMessage]);
+  ws.onclose = () => {
+    console.log("[WS] Disconnected — reconnecting in 3s");
+    socket = null;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(ensureConnection, 3000);
+  };
 
-  useEffect(() => {
-    mountedRef.current = true;
-    connect();
-
-    // Heartbeat ping every 20s
-    const ping = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send("ping");
+  if (!pingTimer) {
+    pingTimer = setInterval(() => {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send("ping");
       }
     }, 20_000);
+  }
+}
 
+interface UseWebSocketOptions {
+  onMessage: Listener;
+}
+
+export function useWebSocket({ onMessage }: UseWebSocketOptions) {
+  useEffect(() => {
+    ensureConnection();
+    listeners.add(onMessage);
     return () => {
-      mountedRef.current = false;
-      clearInterval(ping);
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      wsRef.current?.close();
+      listeners.delete(onMessage);
     };
-  }, [connect]);
+  }, [onMessage]);
 }

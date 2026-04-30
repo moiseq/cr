@@ -45,6 +45,24 @@ class SignalModel(Base):
     reasons = Column(Text, nullable=False)
 
 
+class SignalStateModel(Base):
+    """Single-row table holding the full signal-trader state JSON blob."""
+
+    __tablename__ = "signal_state"
+
+    id = Column(Integer, primary_key=True)  # always 1
+    data = Column(Text, nullable=False)
+
+
+class GridStateModel(Base):
+    """Single-row table holding the full grid-trading state JSON blob."""
+
+    __tablename__ = "grid_state"
+
+    id = Column(Integer, primary_key=True)  # always 1
+    data = Column(Text, nullable=False)
+
+
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

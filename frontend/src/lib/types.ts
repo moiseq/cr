@@ -43,15 +43,18 @@ export interface Sentiment {
   label: "bullish" | "bearish" | "neutral";
 }
 
-export type WsMessageType = "candle_live" | "candle_closed";
+export type WsMessageType = "candle_live" | "candle_closed" | "signal_state" | "grid_state";
 
 export interface WsMessage {
   type: WsMessageType;
-  symbol: string;
-  timeframe: string;
-  candle: Candle;
+  // Present for candle_live / candle_closed
+  symbol?: string;
+  timeframe?: string;
+  candle?: Candle;
   indicators?: Indicators;
   signal?: Signal;
+  // Present for signal_state / grid_state
+  state?: unknown;
 }
 
 export type Pair =
@@ -62,4 +65,4 @@ export type Pair =
   | "XRPUSDT"
   | string;
 
-export type Timeframe = "1m" | "5m" | "15m" | string;
+export type Timeframe = "15m" | "1h" | "4h" | string;

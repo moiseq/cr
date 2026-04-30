@@ -3,7 +3,7 @@
 import { Timeframe } from "@/lib/types";
 import clsx from "clsx";
 
-const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m"];
+const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h"];
 
 interface Props {
   value: Timeframe;

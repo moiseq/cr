@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import clsx from "clsx";
-import { MAX_LEVERAGE, PaperTrade, PaperTradingState } from "@/hooks/usePaperTrading";
+import { MAX_LEVERAGE, SignalTrade, SignalTraderState } from "@/hooks/useSignalTrader";
 
 interface Props {
-  state: PaperTradingState;
+  state: SignalTraderState;
   onReset: (balance: number, riskPct: number, leverage: number) => void;
 }
 
@@ -32,7 +32,7 @@ function fmtTime(ts?: number) {
   }).format(ts);
 }
 
-function TradeRow({ trade }: { trade: PaperTrade }) {
+function TradeRow({ trade }: { trade: SignalTrade }) {
   const isBuy = trade.direction === "BUY";
   const isOpen = trade.status === "open";
   const pnlPositive = (trade.pnl ?? 0) >= 0;
@@ -96,7 +96,7 @@ function TradeRow({ trade }: { trade: PaperTrade }) {
   );
 }
 
-function OpenTradeBanner({ trade }: { trade: PaperTrade }) {
+function OpenTradeBanner({ trade }: { trade: SignalTrade }) {
   const mark = trade.lastPrice ?? trade.entryPrice;
   const unreal =
     trade.direction === "BUY"
@@ -135,7 +135,7 @@ function OpenTradeBanner({ trade }: { trade: PaperTrade }) {
   );
 }
 
-export function PaperTradingPanel({ state, onReset }: Props) {
+export function SignalTraderPanel({ state, onReset }: Props) {
   const [showConfig, setShowConfig] = useState(false);
   const [balanceInput, setBalanceInput] = useState(String(state.initialBalance));
   const [riskInput, setRiskInput] = useState(String(state.riskPerTradePct));
@@ -170,11 +170,11 @@ export function PaperTradingPanel({ state, onReset }: Props) {
       {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <h2 className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
-          Paper Trading — All Pairs · Weighted Score + ATR Risk Sizing
+          Signal Trading — All Pairs · Weighted Score + ATR Risk Sizing
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] text-slate-500 uppercase">
-            Risk {state.riskPerTradePct}% · Leverage {state.leverage}x · 5m+15m · LONG/SHORT
+            Risk {state.riskPerTradePct}% · Leverage {state.leverage}x · 15m+1h · LONG/SHORT
           </span>
           <button
             onClick={() => setShowConfig((v) => !v)}

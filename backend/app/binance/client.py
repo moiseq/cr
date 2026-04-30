@@ -60,9 +60,10 @@ class BinanceWSClient:
     async def _run_forever(self) -> None:
         url = build_combined_stream_url()
         backoff = 1
-        # With 15 streams (1m/5m/15m on 5 pairs), Binance pushes a tick at least
-        # every second. If we go longer than this without ANY message, the
-        # connection is silently dead — force a reconnect.
+        # We always have at least one open candle being traded so Binance pushes
+        # a kline tick frequently (multiple per second on liquid pairs). If we
+        # go longer than this without ANY message, the connection is silently
+        # dead — force a reconnect.
         idle_timeout = 60
         while self._running:
             try:

@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from app.api.ws import manager
 from app.config import settings
+from app.core import grid_trader, signal_trader
 from app.indicators.calculator import calculate_indicators
 from app.indicators.signals import generate_signal
 from app.sentiment.news import compute_sentiment
@@ -61,6 +62,30 @@ async def seed_buffers() -> None:
                 logger.info("Recalculated indicators for %s/%s after seed", symbol, timeframe)
 
 
+async def bootstrap_grid_regimes() -> None:
+    """Force an initial regime detection / grid build for grid-traded pairs.
+
+    Without this the grid would sit with regime=UNKNOWN until the next live
+    REGIME_TIMEFRAME candle closes (up to 1 hour). Uses the most recent closed
+    candle from the seeded buffer.
+    """
+    sentiment_score = float(_sentiment_cache.get("score", 0.0) or 0.0)
+    for symbol in grid_trader.GRID_PAIRS:
+        key = (symbol, grid_trader.REGIME_TIMEFRAME)
+        buf = _buffers.get(key)
+        if not buf:
+            continue
+        candle = buf[-1]
+        indicators = calculate_indicators(buf)
+        if indicators is None:
+            continue
+        public_indicators = {k: v for k, v in indicators.items() if not k.startswith("_")}
+        try:
+            await grid_trader.on_regime_candle(symbol, candle, public_indicators, sentiment_score)
+        except Exception:
+            logger.exception("Bootstrap regime failed for %s", symbol)
+
+
 async def handle_kline(symbol: str, timeframe: str, candle: dict) -> None:
     """Called for every kline event. Only processes closed candles."""
     if not candle.get("is_final"):
@@ -71,6 +96,16 @@ async def handle_kline(symbol: str, timeframe: str, candle: dict) -> None:
             "timeframe": timeframe,
             "candle": candle,
         })
+        # Refresh unrealised P&L on the open signal-trader position for this symbol (if any).
+        try:
+            await signal_trader.on_live_tick(symbol, candle)
+        except Exception:
+            logger.exception("signal_trader.on_live_tick failed")
+        # Same for grid-trading open cells.
+        try:
+            await grid_trader.on_live_tick(symbol, candle)
+        except Exception:
+            logger.exception("grid_trader.on_live_tick failed")
         return
 
     # --- Closed candle ---
@@ -135,3 +170,22 @@ async def handle_kline(symbol: str, timeframe: str, candle: dict) -> None:
 
     await manager.broadcast(payload)
     logger.debug("Processed closed candle %s %s close=%.4f", symbol, timeframe, candle["close"])
+
+    # Feed the signal-trader engine. It decides whether to manage open trades
+    # and/or open a new one based on the signal. Runs entirely in background;
+    # independent of any connected frontend client.
+    try:
+        await signal_trader.on_closed_candle(symbol, timeframe, candle, public_indicators, signal)
+    except Exception:
+        logger.exception("signal_trader.on_closed_candle failed")
+
+    # Feed the grid trader. 1h drives regime detection + grid rebuilds; 15m
+    # drives cell entries / exits.
+    sentiment_score = float(_sentiment_cache.get("score", 0.0) or 0.0)
+    try:
+        if timeframe == grid_trader.REGIME_TIMEFRAME:
+            await grid_trader.on_regime_candle(symbol, candle, public_indicators, sentiment_score)
+        if timeframe == grid_trader.EXECUTION_TIMEFRAME:
+            await grid_trader.on_execution_candle(symbol, candle, sentiment_score)
+    except Exception:
+        logger.exception("grid_trader closed-candle hook failed")

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     binance_ws_url: str = "wss://stream.binance.com:9443/stream"
 
     pairs: List[str] = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT"]
-    timeframes: List[str] = ["1m", "5m", "15m"]
+    timeframes: List[str] = ["15m", "1h", "4h"]
 
     # Candle buffer per pair/timeframe
     candle_buffer_size: int = 500

@@ -9,9 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import verify_internal_websocket
 from app.api.routes import router
 from app.api.ws import manager
+from app.binance.backfill import backfill_all
 from app.binance.client import BinanceWSClient
 from app.config import settings
-from app.core.processor import handle_kline, seed_buffers, sentiment_refresh_loop
+from app.core import grid_trader, signal_trader
+from app.core.processor import bootstrap_grid_regimes, handle_kline, seed_buffers, sentiment_refresh_loop
 from app.storage.database import init_db
 from app.storage.redis_client import close_redis, wait_for_redis
 
@@ -34,8 +36,23 @@ async def lifespan(app: FastAPI):
     # Swarm does not guarantee dependency readiness; wait for Redis before startup work.
     await wait_for_redis()
 
+    # Backfill historical candles via REST for any timeframe that doesn't yet
+    # have enough history in Redis (avoids waiting EMA50 candles before grid
+    # regime / signal-trader can fire on a newly-added timeframe).
+    await backfill_all()
+
     # Seed in-memory candle buffers from Redis (enables indicators immediately after restart)
     await seed_buffers()
+
+    # Load persisted signal-trader state (balance, open positions, history).
+    await signal_trader.load()
+
+    # Load persisted grid-trading state.
+    await grid_trader.load()
+
+    # Bootstrap regime / build the grid right away from the seeded buffers so
+    # we don't have to wait for the next 1h candle close to start trading.
+    await bootstrap_grid_regimes()
 
     # Start Binance WebSocket client
     binance_client = BinanceWSClient(on_kline=handle_kline)

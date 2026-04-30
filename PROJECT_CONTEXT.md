@@ -17,7 +17,7 @@ A full-stack real-time crypto trading dashboard that streams live candlestick da
 
 ## Pairs & timeframes
 - Pairs: BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT, XRPUSDT (spot prices)
-- Timeframes: 1m, 5m, 15m
+- Timeframes: 15m, 1h, 4h
 - Total streams: 15
 
 ## Indicators computed
@@ -35,7 +35,7 @@ Strength buckets (from `config.py`):
 
 ### Paper trading (frontend, `hooks/usePaperTrading.ts`)
 - **LONG and SHORT** (futures-style semantics over spot price feed).
-- **Timeframes**: 5m and 15m only. 1m is shown for charts but never trades.
+- **Timeframes**: 15m and 1h. 4h is shown for charts/context but never trades.
 - **Entry**: STRONG always (any direction); MEDIUM only if a matching trend/mean-reversion reason confirms (`trend_up_confirm` or `mean_reversion_long` for LONG; `trend_down_confirm` or `mean_reversion_short` for SHORT).
 - **Sizing**: risk-based. `position_notional = (equity × risk%) / sl_distance%`. Capped by `balance × leverage`.
 - **SL/TP**: ATR-based (`SL = 1×ATR`, `TP = 2×ATR`). Trailing to breakeven once price moves 1×ATR in favour (both directions).

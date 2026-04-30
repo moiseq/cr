@@ -3,28 +3,31 @@
 import { useState } from "react";
 import { Pair, Timeframe } from "@/lib/types";
 import { useMarketData } from "@/hooks/useMarketData";
-import { usePaperTrading } from "@/hooks/usePaperTrading";
+import { useSignalTrader } from "@/hooks/useSignalTrader";
+import { useGridTrading } from "@/hooks/useGridTrading";
 import { useSentiment } from "@/hooks/useSentiment";
 import { PairSelector } from "@/components/PairSelector";
 import { TimeframeSelector } from "@/components/TimeframeSelector";
 import { CandlestickChart } from "@/components/Chart/CandlestickChart";
 import { IndicatorPanel } from "@/components/Chart/IndicatorPanel";
 import { SignalFeed } from "@/components/Signals/SignalFeed";
-import { PaperTradingPanel } from "@/components/PaperTrading/PaperTradingPanel";
+import { SignalTraderPanel } from "@/components/SignalTrader/SignalTraderPanel";
+import { GridTradingPanel } from "@/components/Grid/GridTradingPanel";
 import { Sidebar, View } from "@/components/Sidebar";
 
 export default function DashboardPage() {
   const [pair, setPair] = useState<Pair>("BTCUSDT");
-  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [view, setView] = useState<View>("dashboard");
 
-  const { ptState, onClosedCandle, reset, openTradesCount } = usePaperTrading({
-    initialBalance: 1000,
-    riskPerTradePct: 0.5,
-    leverage: 5,
-  });
+  const { state: signalState, reset, openTradesCount } = useSignalTrader();
+  const {
+    state: gridState,
+    reset: gridReset,
+    openCellsCount,
+  } = useGridTrading();
 
-  const { data, loadHistory } = useMarketData(pair, timeframe, onClosedCandle);
+  const { data, loadHistory } = useMarketData(pair, timeframe);
   const sentiment = useSentiment();
 
   function handlePairChange(p: Pair) {
@@ -42,7 +45,12 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-[100dvh] bg-surface flex flex-col md:flex-row">
-      <Sidebar current={view} onChange={setView} openTradesCount={openTradesCount} />
+      <Sidebar
+        current={view}
+        onChange={setView}
+        openTradesCount={openTradesCount}
+        openCellsCount={openCellsCount}
+      />
 
       <main className="flex-1 p-3 md:p-4 min-w-0">
         {view === "dashboard" && (
@@ -124,7 +132,7 @@ export default function DashboardPage() {
 
               {openTradesCount > 0 && (
                 <button
-                  onClick={() => setView("paper")}
+                  onClick={() => setView("signal")}
                   className="bg-yellow-900/30 border border-yellow-600/50 rounded px-4 py-2 hover:bg-yellow-900/50 transition"
                 >
                   <span className="text-xs text-yellow-400/70 block">Active Trades</span>
@@ -158,17 +166,31 @@ export default function DashboardPage() {
           </>
         )}
 
-        {view === "paper" && (
+        {view === "signal" && (
           <>
             <header className="mb-4">
               <h1 className="text-xl font-bold tracking-tight">
-                Paper Trading{" "}
+                Signal Trading{" "}
                 <span className="text-slate-500 font-normal text-base">
                   All pairs · global history
                 </span>
               </h1>
             </header>
-            <PaperTradingPanel state={ptState} onReset={reset} />
+            <SignalTraderPanel state={signalState} onReset={reset} />
+          </>
+        )}
+
+        {view === "grid" && (
+          <>
+            <header className="mb-4">
+              <h1 className="text-xl font-bold tracking-tight">
+                Grid Trading{" "}
+                <span className="text-slate-500 font-normal text-base">
+                  Adaptive grid · BTC + ETH
+                </span>
+              </h1>
+            </header>
+            <GridTradingPanel state={gridState} onReset={gridReset} />
           </>
         )}
       </main>

@@ -14,14 +14,6 @@ interface MarketData {
 
 type MarketState = Record<string, Record<string, MarketData>>;
 
-export type OnClosedCandleCallback = (
-  symbol: string,
-  timeframe: string,
-  candle: Candle,
-  indicators: Indicators,
-  signal: Signal | undefined
-) => void;
-
 function key(symbol: string, tf: string) {
   return `${symbol}:${tf}`;
 }
@@ -30,21 +22,9 @@ function emptyData(): MarketData {
   return { candles: [], indicators: {}, signals: [] };
 }
 
-export function useMarketData(
-  activePair: Pair,
-  activeTimeframe: Timeframe,
-  onClosedCandle?: OnClosedCandleCallback
-) {
+export function useMarketData(activePair: Pair, activeTimeframe: Timeframe) {
   const [state, setState] = useState<MarketState>({});
   const loadedRef = useRef<Set<string>>(new Set());
-
-  // Keep stable refs so handleMessage closure doesn't need these in deps
-  const onClosedCandleRef = useRef(onClosedCandle);
-  onClosedCandleRef.current = onClosedCandle;
-  const activePairRef = useRef(activePair);
-  activePairRef.current = activePair;
-  const activeTfRef = useRef(activeTimeframe);
-  activeTfRef.current = activeTimeframe;
 
   const loadHistory = useCallback(async (symbol: string, tf: string) => {
     const k = key(symbol, tf);
@@ -90,7 +70,11 @@ export function useMarketData(
   }, []);
 
   const handleMessage = useCallback((msg: WsMessage) => {
+    // Ignore non-candle WS messages (e.g. signal_state — handled by useSignalTrader).
+    if (msg.type !== "candle_live" && msg.type !== "candle_closed") return;
+
     const { type, symbol, timeframe, candle, indicators, signal } = msg;
+    if (!symbol || !timeframe || !candle) return;
 
     setState((prev) => {
       const pairData = prev[symbol] ?? {};
@@ -124,12 +108,6 @@ export function useMarketData(
         },
       };
     });
-
-    // Fire paper-trading callback for EVERY closed candle (all pairs/timeframes).
-    // The hook itself decides which to act on.
-    if (type === "candle_closed" && onClosedCandleRef.current) {
-      onClosedCandleRef.current(symbol, timeframe, candle, indicators ?? {}, signal);
-    }
   }, []);
 
   useWebSocket({ onMessage: handleMessage });
